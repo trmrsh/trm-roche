@@ -10,6 +10,50 @@
 // Returns tuple of x, y arrays representing the secondary star's Roche lobe
 
 static PyObject* 
+roche_ineg(PyObject *self, PyObject *args)
+{
+    
+    double q, iangle, x, y, z;
+    double ffac=1., delta=1.e-7;
+    int star = 2;
+    if(!PyArg_ParseTuple(args, "ddddd|ddi", &q, &iangle, &x, &y, &z, &ffac, &delta, &star))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: q <= 0");
+	return NULL;
+    }
+    if(iangle <= 0. || iangle > 90.){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: iangle out of range 0 to 90");
+	return NULL;
+    }
+    if(ffac <= 0. || ffac > 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: ffac out of range 0 to 1");
+	return NULL;
+    }
+    if(delta <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: delta <= 0");
+	return NULL;
+    }
+    if(star < 1 || star > 2){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: star must be either 1 or 2");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    Subs::Vec3 r(x,y,z);
+    double ingress, egress;
+    if(!Roche::ingress_egress(q, ffac, iangle, r, ingress, egress, delta, star == 1 ? Roche::PRIMARY : Roche::SECONDARY)){
+	PyErr_SetString(PyExc_ValueError, "roche.ineg: point is not eclipsed");
+	return NULL;
+    }
+    if(ingress
+    return Py_BuildValue("dd", ingress, egress);
+};
+
+//----------------------------------------------------------------------------------------
+// Returns tuple of x, y arrays representing the secondary star's Roche lobe
+
+static PyObject* 
 roche_lobe1(PyObject *self, PyObject *args)
 {
 
@@ -336,24 +380,37 @@ roche_xl3(PyObject *self, PyObject *args)
 // The methods
 
 static PyMethodDef RocheMethods[] = {
+
+    {"ineg", roche_ineg, METH_VARARGS, 
+     "(in,out) = ineg(q, i, x, y, z, ffac=1., delta=1.e-7, star=2), computes ingress and egress phase of a point"},
+
     {"lobe1", roche_lobe1, METH_VARARGS, 
      "r = lobe1(q, n=200), q = M2/M1. Returns 2xn array of primary star's Roche lobe."},
+
     {"lobe2", roche_lobe2, METH_VARARGS, 
      "r = lobe2(q, n=200), q = M2/M1. Returns 2xn array of secondary star's Roche lobe."},
+
     {"stream", roche_stream, METH_VARARGS, 
      "r = stream(q, rad, n=200), q = M2/M1. Returns 2xn array of the gas stream."},
+
     {"strmnx", roche_strmnx, METH_VARARGS, 
      "(x,y,vx1,vy1,vx2,vy2) = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream."},
+
     {"vlobe1", roche_vlobe1, METH_VARARGS, 
      "v = vlobe1(q, n=200), q = M2/M1. Returns 2xn array of primary star's Roche lobe in velocity space."},
+
     {"vlobe2", roche_vlobe2, METH_VARARGS, 
      "v = vlobe2(q, n=200), q = M2/M1. Returns 2xn array of secondary star's Roche lobe in velocity space."},
+
     {"vstream", roche_vstream, METH_VARARGS, 
      "v = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns 2xn array of positions of the gas stream in velocity space."},
+
     {"xl1", roche_xl1, METH_VARARGS, 
      "xl1(q), q = M2/M1. Calculate the inner Lagrangian point distance."},
+
     {"xl2", roche_xl2, METH_VARARGS, 
      "xl2(q), q = M2/M1. Calculate the L2 point distance."},
+
     {"xl3", roche_xl3, METH_VARARGS, 
      "xl3(q), q = M2/M1. Calculate the L3 point distance."},
 
