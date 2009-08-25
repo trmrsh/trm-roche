@@ -7,6 +7,129 @@
 #include "trm_roche.h"
 
 //----------------------------------------------------------------------------------------
+// bspot returns position of bright-spot
+
+static PyObject* 
+roche_bspot(PyObject *self, PyObject *args)
+{
+    double q, rad, acc=1.e-7;
+    if(!PyArg_ParseTuple(args, "dd|dd", &q, &rad, &acc))
+	return NULL;
+    if(q <= 0){
+	PyErr_SetString(PyExc_ValueError, "roche.stradv: q <= 0");
+	return NULL;
+    }
+    if(rad <= 0){
+	PyErr_SetString(PyExc_ValueError, "roche.stradv: rad <= 0");
+	return NULL;
+    }
+    if(acc <= 0){
+	PyErr_SetString(PyExc_ValueError, "roche.stradv: acc <= 0");
+	return NULL;
+    }
+
+    Subs::Vec3 r, v, rs, vs;
+    Roche::strinit(q,r,v);
+    try{
+	Roche::stradv(q, r, v, rad, acc, 1.e-2);
+	return Py_BuildValue("dddd", r.x(), r.y(), v.x(), v.y());
+    }
+    catch(const Roche::Roche_Error& err){
+	PyErr_SetString(PyExc_ValueError, "roche.stradv: never achieved desired radius");
+	return NULL;
+    }
+};
+
+//----------------------------------------------------------------------------------------
+// Computes position of a point of given potential in Roche geometry
+
+static PyObject* 
+roche_face(PyObject *self, PyObject *args)
+{
+    
+    double q, x, y, z, rref, pref;
+    double acc=1.e-5;
+    int star = 2;
+    if(!PyArg_ParseTuple(args, "dddddd|id", &q, &x, &y, &z, &rref, &pref, &star, &acc))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.face: q <= 0");
+	return NULL;
+    }
+    if(rref <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.face: rref must be > 0");
+	return NULL;
+    }
+    if(acc <= 0. || acc > 0.1){
+	PyErr_SetString(PyExc_ValueError, "roche.face: acc <= 0 or acc > 0.1");
+	return NULL;
+    }
+    if(star < 1 || star > 2){
+	PyErr_SetString(PyExc_ValueError, "roche.face: star must be either 1 or 2");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    Subs::Vec3 dirn(x,y,z), pvec, dvec;
+    double r, g;
+    Roche::face(q, dirn, rref, pref, acc, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, pvec, dvec, r, g);
+    return Py_BuildValue("(ddd)(ddd)dd", pvec.x(), pvec.y(), pvec.z(), dvec.x(), dvec.y(), dvec.z(), r, g);
+};
+
+
+//----------------------------------------------------------------------------------------
+// Finds inclination corresponding to a given mass ratio and white dwarf eclipse phase width
+// returns -1 if there is no valid value
+
+static PyObject* 
+roche_findi(PyObject *self, PyObject *args)
+{
+    
+    double q, pwidth, acc=1.e-4, di=1.e-5;
+    if(!PyArg_ParseTuple(args, "dd|dddd", &q, &pwidth, &acc, &di))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.findi: q must be > 0");
+	return NULL;
+    }
+    if(pwidth <= 0. || pwidth > 0.25){
+	PyErr_SetString(PyExc_ValueError, "roche.findi: pwidth out of range 0 to 0.25");
+	return NULL;
+    }
+    if(acc <= 0. || acc > 0.1){
+	PyErr_SetString(PyExc_ValueError, "roche.findi: acc <= 0 or acc > 0.1");
+	return NULL;
+    }
+    if(di <= 0. || di > 10.){
+	PyErr_SetString(PyExc_ValueError, "roche.findi: di <= 0 or di > 10.");
+	return NULL;
+    }
+
+    Subs::Vec3 r;
+    double phi = pwidth/2.;
+    double ilo = 65., ihi = 90.;
+    bool elo = Roche::fblink(q, ilo, phi, r, Roche::SECONDARY, 1.0, acc); 
+    bool ehi = Roche::fblink(q, ihi, phi, r, Roche::SECONDARY, 1.0, acc); 
+
+    double iangle;
+    if(elo && ehi){
+	iangle = -2.;
+    }else if(!elo && !ehi){
+	iangle = -1.;
+    }else{
+	while(ihi - ilo > di){
+	    iangle = (ilo+ihi)/2.;
+	    if(Roche::fblink(q, iangle, phi, r, Roche::SECONDARY, 1.0, acc))
+		ihi = iangle;
+	    else
+		ilo = iangle;
+	}
+	iangle = (ilo+ihi)/2.;
+    }
+    return Py_BuildValue("d", iangle);
+};
+
+//----------------------------------------------------------------------------------------
 // Finds mass ratio corresponding to a given angle and white dwarf eclipse phase width
 
 static PyObject* 
@@ -54,6 +177,38 @@ roche_findq(PyObject *self, PyObject *args)
 	q = (qlo+qhi)/2.;
     }
     return Py_BuildValue("d", q);
+};
+
+//----------------------------------------------------------------------------------------
+// Finds mass ratio corresponding to a given angle and white dwarf eclipse phase width
+
+static PyObject* 
+roche_findphi(PyObject *self, PyObject *args)
+{
+    
+    double q, iangle, delta=1.e-6;
+    if(!PyArg_ParseTuple(args, "dd|dddd", &q, &iangle, &delta))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.findphi: q <= 0");
+	return NULL;
+    }
+    if(iangle <= 0. || iangle > 90.){
+	PyErr_SetString(PyExc_ValueError, "roche.findphi: iangle out of range 0 to 90");
+	return NULL;
+    }
+    if(delta <= 0. || delta > 0.001){
+	PyErr_SetString(PyExc_ValueError, "roche.findphi: delta <= 0 or delta > 0.001");
+	return NULL;
+    }
+
+    Subs::Vec3 r(0,0,0);
+    double ingress, egress;
+    if(!Roche::ingress_egress(q, 1.0, iangle, r, ingress, egress, delta, Roche::SECONDARY)){
+	PyErr_SetString(PyExc_ValueError, "roche.findphi: the centre of mass of the white dwarf is not eclipsed");
+	return NULL;
+    }
+    return Py_BuildValue("d", egress-ingress);
 };
 
 //----------------------------------------------------------------------------------------
@@ -106,10 +261,10 @@ static PyObject*
 roche_ineg(PyObject *self, PyObject *args)
 {
     
-    double q, iangle, x, y, z;
+    double q, iangle, x, y, z=0.;
     double ffac=1., delta=1.e-7;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "ddddd|ddi", &q, &iangle, &x, &y, &z, &ffac, &delta, &star))
+    if(!PyArg_ParseTuple(args, "dddd|dddi", &q, &iangle, &x, &y, &z, &ffac, &delta, &star))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.ineg: q <= 0");
@@ -163,19 +318,26 @@ roche_lobe1(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* r = NULL;
-    r = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(r == NULL) return NULL;
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
 
-    float* x = (float*)r->data;
-    float* y = x + n;
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    float* x = (float*)xo->data;
+    float* y = (float*)yo->data;
 
     // Compute Roche lobe
     Roche::lobe1(q, x, y, n);
 
-    return PyArray_Return(r);
+    return Py_BuildValue("OO", xo, yo);
 
 };
 
@@ -200,21 +362,115 @@ roche_lobe2(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* r = NULL;
-    r = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(r == NULL) return NULL;
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
 
-    float* x = (float*)r->data;
-    float* y = x + n;
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    float* x = (float*)xo->data;
+    float* y = (float*)yo->data;
 
     // Compute Roche lobe
     Roche::lobe2(q, x, y, n);
 
-    return PyArray_Return(r);
+    return Py_BuildValue("OO", xo, yo);
 
 };
+
+//----------------------------------------------------------------------------------------
+// Computes Roche potential at a given point
+
+static PyObject* 
+roche_rpot(PyObject *self, PyObject *args)
+{
+    
+    double q, x, y, z;
+    if(!PyArg_ParseTuple(args, "dddd", &q, &x, &y, &z))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    Subs::Vec3 p(x,y,z);
+    double rp = Roche::rpot(q, p);
+    return Py_BuildValue("d", rp);
+};
+
+//----------------------------------------------------------------------------------------
+// Returns tuple of x, y arrays representing the "shadow" of the secondary star's Roche lobe
+
+static PyObject* 
+roche_shadow(PyObject *self, PyObject *args)
+{
+
+    double q, iangle, phi, dist=5., acc=1.e-4;
+    int n = 200;
+    if(!PyArg_ParseTuple(args, "ddd|idd:roche.shadow", &q, &iangle, &phi, &n, &dist, &acc))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.shadow: q <= 0");
+	return NULL;
+    }
+    if(iangle <= 0. || iangle > 90){
+	PyErr_SetString(PyExc_ValueError, "roche.shadow: iangle <= 0 or > 90");
+	return NULL;
+    }
+    if(n < 2){
+	PyErr_SetString(PyExc_ValueError, "roche.shadow: n < 2");
+	return NULL;
+    }
+    if(dist <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.shadow: dist <= 0");
+	return NULL;
+    }
+    if(acc <= 0. || acc > 0.1){
+	PyErr_SetString(PyExc_ValueError, "roche.shadow: acc <= 0 or > 0.1");
+	return NULL;
+    }
+
+    // Create output array containing both x and y arrays.
+    npy_intp dim[1] = {n};
+
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
+
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    PyArrayObject* so = NULL;
+    so = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_BOOL);
+    if(so == NULL){
+	Py_DECREF(xo);
+	Py_DECREF(yo);
+	return NULL;
+    }
+
+    float* x = (float*)xo->data;
+    float* y = (float*)yo->data;
+    bool*  s = (bool*)so->data; 
+
+    // Compute Roche lobe
+    Roche::roche_shadow(q, iangle, phi, dist, acc, x, y, s, n);
+
+    return Py_BuildValue("OOO",xo,yo,so);
+
+};
+
 
 //----------------------------------------------------------------------------------------
 // Returns tuple of x, y arrays representing the gas stream
@@ -241,20 +497,26 @@ roche_stream(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* r = NULL;
-    r = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(r == NULL) return NULL;
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
 
-    float* x = (float*)r->data;
-    float* y = x + n;
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    float* x = (float*)xo->data;
+    float* y = (float*)yo->data;
 
     // Carry out the stream integration
-
     Roche::streamr(q, rad, x, y, n);
 
-    return PyArray_Return(r);
+    return Py_BuildValue("OO", xo, yo);
 
 };
 
@@ -290,7 +552,6 @@ roche_strmnx(PyObject *self, PyObject *args)
     return Py_BuildValue("dddddd", r.x(), r.y(), tvx1, tvy1, tvx2, tvy2);
 };
 
-
 //----------------------------------------------------------------------------------------
 // Returns tuple of x, y arrays representing the primary star's Roche lobe in velocity space
 
@@ -312,19 +573,26 @@ roche_vlobe1(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* v = NULL;
-    v = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(v == NULL) return NULL;
+    PyArrayObject* vxo = NULL;
+    vxo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vxo == NULL) return NULL;
 
-    float* vx = (float*)v->data;
-    float* vy = vx + n;
+    PyArrayObject* vyo = NULL;
+    vyo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vyo == NULL){
+	Py_DECREF(vxo);
+	return NULL;
+    }
+
+    float* vx = (float*)vxo->data;
+    float* vy = (float*)vyo->data;
 
     // Compute Roche lobe
     Roche::vlobe1(q, vx, vy, n);
 
-    return PyArray_Return(v);
+    return Py_BuildValue("OO", vxo, vyo);
 
 };
 
@@ -350,19 +618,26 @@ roche_vlobe2(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* v = NULL;
-    v = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(v == NULL) return NULL;
+    PyArrayObject* vxo = NULL;
+    vxo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vxo == NULL) return NULL;
 
-    float* vx = (float*)v->data;
-    float* vy = vx + n;
+    PyArrayObject* vyo = NULL;
+    vyo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vyo == NULL){
+	Py_DECREF(vxo);
+	return NULL;
+    }
+
+    float* vx = (float*)vxo->data;
+    float* vy = (float*)vyo->data;
 
     // Compute Roche lobe
     Roche::vlobe2(q, vx, vy, n);
 
-    return PyArray_Return(v);
+    return Py_BuildValue("OO", vxo, vyo);
 
 };
 
@@ -395,14 +670,22 @@ roche_vstream(PyObject *self, PyObject *args)
     }
 
     // Create output array containing both x and y arrays.
-    npy_intp dim[2] = {2, n};
+    npy_intp dim[1] = {n};
 
-    PyArrayObject* v = NULL;
-    v = (PyArrayObject*) PyArray_SimpleNew(2, dim, PyArray_FLOAT);
-    if(v == NULL) return NULL;
+    PyArrayObject* vxo = NULL;
+    vxo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vxo == NULL) return NULL;
 
-    float* vx = (float*)v->data;
-    float* vy = vx + n;
+    PyArrayObject* vyo = NULL;
+    vyo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vyo == NULL){
+	Py_DECREF(vxo);
+	return NULL;
+    }
+
+    float* vx = (float*)vxo->data;
+    float* vy = (float*)vyo->data;
+
 
     // Carry out the stream integration
     try{
@@ -413,7 +696,7 @@ roche_vstream(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return PyArray_Return(v);
+    return Py_BuildValue("OO", vxo, vyo);
 
 };
 
@@ -474,35 +757,69 @@ roche_xl3(PyObject *self, PyObject *args)
 
 static PyMethodDef RocheMethods[] = {
 
+
+    {"bspot", roche_bspot, METH_VARARGS, 
+     "(x,y,vx,vy) = bspot(q, rad, acc=1.e-7), returns position and stream velocity on stream at radius rad\n\n"
+     " q    -- mass ratio = M2/M1\n"
+     " rad  -- radius to aim for.\n"
+     " acc  -- computationa accuracy parameter."
+    },
+
+    {"face", roche_face, METH_VARARGS, 
+     "face(q, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
+     " q      -- mass ratio = M2/M1\n"
+     " x,y,z  -- direction to take from centre of mass of star in question.\n"
+     " rref   -- reference radius greater than any radius of potential in question.\n"
+     " pref   -- the potential to aim for.\n"
+     " star   -- 1 or 2 for primary or secondary star."
+     " acc    -- accuracy in terms of separation of location."
+},
+
+
+    {"findi", roche_findi, METH_VARARGS, 
+     "findi(q, deltaphi, acc=1.e-4, di=1.e-5), computes inclination for a given mass ratio and phase width"},
+
     {"findq", roche_findq, METH_VARARGS, 
-     "findq(i, pwidth, acc=1.e-4, dq=1.e-5, qlo=0.005, qhi=2.), computes mass ratio q for a given phase width and inclination"},
+     "findq(i, deltaphi, acc=1.e-4, dq=1.e-5, qlo=0.005, qhi=2.), computes mass ratio q for a given phase width and inclination"},
+
+    {"findphi", roche_findphi, METH_VARARGS, 
+     "findphi(q, i, delta=1.e-6), computes deltaphi for a given mass ratio and inclination"},
 
     {"fblink", roche_fblink, METH_VARARGS, 
      "fblink(q, i, phi, x, y, z, ffac=1., acc=1.e-4, star=2), computes whether a point is eclipsed or not"},
 
     {"ineg", roche_ineg, METH_VARARGS, 
-     "(in,out) = ineg(q, i, x, y, z, ffac=1., delta=1.e-7, star=2), computes ingress and egress phase of a point"},
+     "(in,out) = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2), computes ingress and egress phase of a point"},
 
     {"lobe1", roche_lobe1, METH_VARARGS, 
-     "r = lobe1(q, n=200), q = M2/M1. Returns 2xn array of primary star's Roche lobe."},
+     "(x,y) = lobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe."},
 
     {"lobe2", roche_lobe2, METH_VARARGS, 
-     "r = lobe2(q, n=200), q = M2/M1. Returns 2xn array of secondary star's Roche lobe."},
+     "(x,y) = lobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe."},
+
+    {"rpot", roche_rpot, METH_VARARGS, 
+     "rp = rpot(q, x, y, z), q = M2/M1. Returns Roche potential at (x,y,z)."},
+
+    {"shadow", roche_shadow, METH_VARARGS, 
+     "(x,y,s) = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
 
     {"stream", roche_stream, METH_VARARGS, 
-     "r = stream(q, rad, n=200), q = M2/M1. Returns 2xn array of the gas stream."},
+     "(x,y) = stream(q, rad, n=200), q = M2/M1. Returns arrays of the gas stream."},
 
     {"strmnx", roche_strmnx, METH_VARARGS, 
-     "(x,y,vx1,vy1,vx2,vy2) = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream."},
+     "(x,y,vx1,vy1,vx2,vy2) = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream.\n"
+     "Two sets of velocities are reported, the first for the pure stream, the second for the disk at that point.\n"},
 
     {"vlobe1", roche_vlobe1, METH_VARARGS, 
-     "v = vlobe1(q, n=200), q = M2/M1. Returns 2xn array of primary star's Roche lobe in velocity space."},
+     "(vx,vy) = vlobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe in velocity space."},
 
     {"vlobe2", roche_vlobe2, METH_VARARGS, 
-     "v = vlobe2(q, n=200), q = M2/M1. Returns 2xn array of secondary star's Roche lobe in velocity space."},
+     "(vx,vy) = vlobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe in velocity space."},
 
     {"vstream", roche_vstream, METH_VARARGS, 
-     "v = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns 2xn array of positions of the gas stream in velocity space."},
+     "(vx,vy) = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space.\n"
+     "step is measured as a fraction of the distance to the inner Lagrangian point from the primary star. type=1 is the straight\n"
+     "velocity of the gas stream while type=2 is the velocity of the disc along the stream"},
 
     {"xl1", roche_xl1, METH_VARARGS, 
      "xl1(q), q = M2/M1. Calculate the inner Lagrangian point distance."},
