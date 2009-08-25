@@ -35,6 +35,7 @@ setup(name='trm.roche',
       package_dir = {'trm.roche' : os.path.join('trm', 'roche')},
       packages =find_packages(),
       ext_modules=[roche],
+      zip_safe = False,
 
       description='Python interface to roche geometry routines.',
       author='Tom Marsh',
