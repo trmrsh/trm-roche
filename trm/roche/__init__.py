@@ -24,7 +24,8 @@ lobe2     -- the secondary star's Roche lobe
 qirbs     -- computes mass ratio, inclination and radius from bright-spot phases
 rpot      -- computes Roche potential of a point
 shadow    -- returns arrays representing the eclipsed region at a given phase
-stream    -- the gas stream
+stream    -- the gas stream's path in position space
+streamr   -- the gas stream's path in position space to a given radius
 strmnx    -- position and velocity of n-th turning point of gas stream
 vlobe1    -- the primary star's Roche lobe, velocity space
 vlobe2    -- the secondary star's Roche lobe, velocity space
@@ -270,3 +271,4 @@ class RocheError(exceptions.Exception):
 
     def __str__(self):
         return repr(self.value)
+
