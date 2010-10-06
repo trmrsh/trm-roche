@@ -105,11 +105,13 @@ roche_findi(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    Subs::Vec3 r;
-    double phi = pwidth/2.;
     double ilo = 65., ihi = 90.;
-    bool elo = Roche::fblink(q, ilo, phi, r, Roche::SECONDARY, 1.0, acc); 
-    bool ehi = Roche::fblink(q, ihi, phi, r, Roche::SECONDARY, 1.0, acc); 
+    double phi = pwidth/2.;
+    Subs::Vec3 earth1 = Roche::set_earth(ilo, phi);
+    Subs::Vec3 earth2 = Roche::set_earth(ihi, phi);
+    Subs::Vec3 r;
+    bool elo = Roche::fblink(q, earth1, r, Roche::SECONDARY, 1.0, acc); 
+    bool ehi = Roche::fblink(q, earth2, r, Roche::SECONDARY, 1.0, acc); 
 
     double iangle;
     if(elo && ehi){
@@ -119,7 +121,7 @@ roche_findi(PyObject *self, PyObject *args)
     }else{
 	while(ihi - ilo > di){
 	    iangle = (ilo+ihi)/2.;
-	    if(Roche::fblink(q, iangle, phi, r, Roche::SECONDARY, 1.0, acc))
+	    if(Roche::fblink(q, Roche::set_earth(iangle, phi), r, Roche::SECONDARY, 1.0, acc))
 		ihi = iangle;
 	    else
 		ilo = iangle;
@@ -158,8 +160,9 @@ roche_findq(PyObject *self, PyObject *args)
 
     Subs::Vec3 r;
     double phi = pwidth/2.;
-    bool elo = Roche::fblink(qlo, iangle, phi, r, Roche::SECONDARY, 1.0, acc); 
-    bool ehi = Roche::fblink(qhi, iangle, phi, r, Roche::SECONDARY, 1.0, acc); 
+    Subs::Vec3 earth = Roche::set_earth(iangle, phi);
+    bool elo = Roche::fblink(qlo, earth, r, Roche::SECONDARY, 1.0, acc); 
+    bool ehi = Roche::fblink(qhi, earth, r, Roche::SECONDARY, 1.0, acc); 
 
     double q;
     if(elo && ehi){
@@ -169,7 +172,7 @@ roche_findq(PyObject *self, PyObject *args)
     }else{
 	while(qhi - qlo > dq){
 	    q = (qlo+qhi)/2.;
-	    if(Roche::fblink(q, iangle, phi, r, Roche::SECONDARY, 1.0, acc))
+	    if(Roche::fblink(q, earth, r, Roche::SECONDARY, 1.0, acc))
 		qhi = q;
 	    else
 		qlo = q;
@@ -247,7 +250,8 @@ roche_fblink(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 r(x,y,z);
     int eclipse;
-    if(Roche::fblink(q, iangle, phi, r, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, ffac, acc))
+    if(Roche::fblink(q, Roche::set_earth(iangle, phi), r, 
+		     star == 1 ? Roche::PRIMARY : Roche::SECONDARY, ffac, acc))
 	eclipse = 1;
     else
 	eclipse = 0;
@@ -476,19 +480,70 @@ roche_shadow(PyObject *self, PyObject *args)
 // Returns tuple of x, y arrays representing the gas stream
 
 static PyObject* 
-roche_stream(PyObject *self, PyObject *args)
+roche_streamr(PyObject *self, PyObject *args)
 {
 
     double q, rad;
     int n = 200;
-    if(!PyArg_ParseTuple(args, "dd|i:roche.stream", &q, &rad, &n))
+    if(!PyArg_ParseTuple(args, "dd|i:roche.streamr", &q, &rad, &n))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.streamr: q <= 0");
+	return NULL;
+    }
+    if(rad < 0. || rad > 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.streamr: rad < 0 or > 1.");
+	return NULL;
+    }
+    if(n < 2){
+	PyErr_SetString(PyExc_ValueError, "roche.streamr: n < 2");
+	return NULL;
+    }
+
+    // Create output array containing both x and y arrays.
+    npy_intp dim[1] = {n};
+
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
+
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    float* x = (float*)xo->data;
+    float* y = (float*)yo->data;
+
+    // Carry out the stream integration
+    try{
+	Roche::streamr(q, rad, x, y, n);
+    }
+    catch(const Roche::Roche_Error &err){
+	PyErr_SetString(PyExc_ValueError, ("roche.streamr: " + err).c_str());
+	return NULL;
+    }
+
+    return Py_BuildValue("OO", xo, yo);
+
+};
+
+static PyObject* 
+roche_stream(PyObject *self, PyObject *args)
+{
+
+    double q, step;
+    int n = 200;
+    if(!PyArg_ParseTuple(args, "dd|i:roche.stream", &q, &step, &n))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.stream: q <= 0");
 	return NULL;
     }
-    if(rad < 0. || rad > 1.){
-	PyErr_SetString(PyExc_ValueError, "roche.stream: rad < 0 or > 1.");
+    if(step <= 0. || step > 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.stream: step <= 0 or > 1.");
 	return NULL;
     }
     if(n < 2){
@@ -514,7 +569,13 @@ roche_stream(PyObject *self, PyObject *args)
     float* y = (float*)yo->data;
 
     // Carry out the stream integration
-    Roche::streamr(q, rad, x, y, n);
+    try{
+	Roche::stream(q, step, x, y, n);
+    }
+    catch(const Roche::Roche_Error &err){
+	PyErr_SetString(PyExc_ValueError, ("roche.stream: " + err).c_str());
+	return NULL;
+    }
 
     return Py_BuildValue("OO", xo, yo);
 
@@ -660,8 +721,8 @@ roche_vstream(PyObject *self, PyObject *args)
 	PyErr_SetString(PyExc_ValueError, "roche.vstream: step <= 0 or >= 1.");
 	return NULL;
     }
-    if(stype < 1 && stype > 2){
-	PyErr_SetString(PyExc_ValueError, "roche.vstream: stype must be 1 or 2");
+    if(stype < 1 && stype > 3){
+	PyErr_SetString(PyExc_ValueError, "roche.vstream: stype must be 1, 2 or 3");
 	return NULL;
     }
     if(n < 2){
@@ -697,6 +758,158 @@ roche_vstream(PyObject *self, PyObject *args)
     }
 
     return Py_BuildValue("OO", vxo, vyo);
+
+};
+
+//----------------------------------------------------------------------------------------
+// Returns tuple of x, y, vx, vy and jacobi as arrays along the gas stream
+
+static PyObject* 
+roche_pvstream(PyObject *self, PyObject *args)
+{
+
+    double q, pstep = 0.01, vstep = 0.01;
+    int stype=1, n = 60;
+    if(!PyArg_ParseTuple(args, "d|ddii:roche.pvstream", &q, &pstep, &vstep, &stype, &n))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.pvstream: q <= 0");
+	return NULL;
+    }
+    if(pstep <= 0. || pstep >= 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.pvstream: pstep <= 0 or >= 1.");
+	return NULL;
+    }
+    if(vstep <= 0. || vstep >= 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.pvstream: vstep <= 0 or >= 1.");
+	return NULL;
+    }
+    if(stype < 1 && stype > 3){
+	PyErr_SetString(PyExc_ValueError, "roche.pvstream: stype must be 1, 2 or 3");
+	return NULL;
+    }
+    if(n < 2){
+	PyErr_SetString(PyExc_ValueError, "roche.pvstream: n < 2");
+	return NULL;
+    }
+
+    // Create output arrays
+    npy_intp dim[1] = {n};
+
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
+
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    PyArrayObject* vxo = NULL;
+    vxo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vxo == NULL){
+	Py_DECREF(xo);
+	Py_DECREF(yo);
+	return NULL;
+    }
+
+    PyArrayObject* vyo = NULL;
+    vyo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(vyo == NULL){
+	Py_DECREF(xo);
+	Py_DECREF(yo);
+	Py_DECREF(vxo);
+	return NULL;
+    }
+
+    PyArrayObject* jco = NULL;
+    jco = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(jco == NULL){
+	Py_DECREF(xo);
+	Py_DECREF(yo);
+	Py_DECREF(vxo);
+	Py_DECREF(vyo);
+	return NULL;
+    }
+
+    float* x  = (float*)xo->data;
+    float* y  = (float*)yo->data;
+    float* vx = (float*)vxo->data;
+    float* vy = (float*)vyo->data;
+    float* jc = (float*)jco->data;
+
+    // Carry out the stream integration
+    try{
+	const double TLOC =  1.e-8;
+	const double RLOC =  1.e-8;
+	int np;
+	double rl1, tvx, tvy, rend, rnext;
+	Subs::Vec3 r, v, rm, vm;
+	int decr;
+
+	rl1 = Roche::xl1(q);
+
+	/* Store L1 as first point */
+	Roche::vtrans(q, stype, rl1, 0., 0., 0., tvx, tvy);
+	x[0]  = rl1;
+	y[0]  = 0.;
+	vx[0] = tvx;
+	vy[0] = tvy;
+	np    = 1;
+	rnext = rl1*(1.-pstep);
+	decr  = 1;
+
+	/* Initialise stream */
+	Roche::strinit(q, r, v);
+	jc[0] = Roche::jacobi(q, r, v);
+
+	while(np < n){
+
+	    /* Advance one step */
+	    Roche::stradv(q, r, v, rnext, RLOC, 1.e-3);
+	    Roche::vtrans(q, stype, r.x(), r.y(), v.x(), v.y(), tvx, tvy);
+	    x[np]  = r.x();
+	    y[np]  = r.y();
+	    vx[np] = tvx;
+	    vy[np] = tvy;
+	    jc[np] = Roche::jacobi(q, r, v); 
+	    np++;
+	    rnext = decr ? rnext - rl1*pstep : rnext + rl1*pstep;
+
+	    /* Locate and store next turning point */
+	    rm = r;
+	    vm = v;
+	    Roche::strmnx(q, rm, vm, TLOC);
+	    rend = rm.length();
+
+	    /* Loop over all radii wanted before next turning point */
+	    while(np < n && ((decr && rnext > rend) || (!decr && rnext < rend))){
+		Roche::stradv(q, r, v, rnext, RLOC, 1.e-3);
+		Roche::vtrans(q, stype, r.x(), r.y(), v.x(), v.y(), tvx, tvy);
+		x[np]  = r.x();
+		y[np]  = r.y();
+		vx[np] = tvx;
+		vy[np] = tvy;
+		jc[np] = Roche::jacobi(q, r, v); 
+		np++;
+		rnext = decr ? rnext - rl1*pstep : rnext + rl1*pstep;
+	    }
+
+	    /* Change direction of search, and move it to start at turning point */
+	    rnext = decr ? rnext + rl1*pstep : rnext - rl1*pstep;
+	    r     = rm;
+	    v     = vm;
+	    decr  = !decr;
+	}    
+    }
+    catch(const Roche::Roche_Error &err){
+	PyErr_SetString(PyExc_ValueError, ("roche.pvstream: " + err).c_str());
+	return NULL;
+    }
+
+    return Py_BuildValue("OOOOO", xo, yo, vxo, vyo, jco);
 
 };
 
@@ -803,8 +1016,11 @@ static PyMethodDef RocheMethods[] = {
     {"shadow", roche_shadow, METH_VARARGS, 
      "(x,y,s) = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
 
+    {"streamr", roche_streamr, METH_VARARGS, 
+     "(x,y) = streamr(q, rad, n=200), returns arrays of the gas stream. q = M2/M1, rad = minimum radius to aim for."},
+
     {"stream", roche_stream, METH_VARARGS, 
-     "(x,y) = stream(q, rad, n=200), q = M2/M1. Returns arrays of the gas stream."},
+     "(x,y) = stream(q, step, n=200), returns arrays of the gas stream. q = M2/M1, step=distance between adjacent points."},
 
     {"strmnx", roche_strmnx, METH_VARARGS, 
      "(x,y,vx1,vy1,vx2,vy2) = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream.\n"
@@ -820,6 +1036,11 @@ static PyMethodDef RocheMethods[] = {
      "(vx,vy) = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space.\n"
      "step is measured as a fraction of the distance to the inner Lagrangian point from the primary star. type=1 is the straight\n"
      "velocity of the gas stream while type=2 is the velocity of the disc along the stream"},
+
+    {"pvstream", roche_pvstream, METH_VARARGS, 
+     "(x, y, vx, vy, jac) = pvstream(q, pstep=0.01, vstep=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions\n"
+     "of the gas stream in velocity space. pstep is measured as a fraction of the distance to the inner Lagrangian point,\n"
+     "vstep as a fraction of the system scale. jac is the jacobi constant.\n"},
 
     {"xl1", roche_xl1, METH_VARARGS, 
      "xl1(q), q = M2/M1. Calculate the inner Lagrangian point distance."},
