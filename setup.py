@@ -1,9 +1,5 @@
-from ez_setup import use_setuptools
-use_setuptools()
-from setuptools import setup, find_packages
-from distutils.core import Extension
-import os
-import numpy
+from distutils.core import setup, Extension
+import os, numpy
 
 """ Setup script for the roche python extension"""
 
@@ -26,19 +22,16 @@ roche = Extension('trm.roche._roche',
                   include_dirs    = include_dirs,
                   library_dirs    = library_dirs,
                   runtime_library_dirs = library_dirs,
-                  libraries       = ['roche'],
+                  libraries       = ['roche', 'subs'],
                   sources         = [os.path.join('trm', 'roche', 'roche.cc')])
 
 setup(name='trm.roche',
-      namespace_packages = ['trm'],
       version='0.1',
-      package_dir = {'trm.roche' : os.path.join('trm', 'roche')},
-      packages =find_packages(),
+      packages=['trm', 'trm.roche'],
       ext_modules=[roche],
-      zip_safe = False,
 
-      description='Python interface to roche geometry routines.',
       author='Tom Marsh',
+      description='Python interface to roche geometry routines.',
       author_email='t.r.marsh@warwick.ac.uk',
       url='http://www.astro.warwick.ac.uk/',
       long_description="""
