@@ -76,6 +76,36 @@ roche_face(PyObject *self, PyObject *args)
     return Py_BuildValue("(ddd)(ddd)dd", pvec.x(), pvec.y(), pvec.z(), dvec.x(), dvec.y(), dvec.z(), r, g);
 };
 
+//----------------------------------------------------------------------------------------
+// Computes the reference potential
+
+static PyObject* 
+roche_ref_sphere(PyObject *self, PyObject *args)
+{
+    
+    double q, spin, ffac;
+    int star = 2;
+    if(!PyArg_ParseTuple(args, "ddd|i", &q, &spin, &ffac, &star))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.ref_sphere: q <= 0");
+	return NULL;
+    }
+    if(ffac <= 0. || ffac > 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.ref_sphere: require 0 < ffac <= 1");
+	return NULL;
+    }
+    if(star < 1 || star > 2){
+	PyErr_SetString(PyExc_ValueError, "roche.ref_sphere: star must be either 1 or 2");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    double rref, pref;
+    Roche::ref_sphere(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, ffac, rref, pref);
+    return Py_BuildValue("dd", rref, pref);
+};
+
 
 //----------------------------------------------------------------------------------------
 // Finds inclination corresponding to a given mass ratio and white dwarf eclipse phase width
@@ -1005,6 +1035,39 @@ roche_xl3(PyObject *self, PyObject *args)
     return Py_BuildValue("f", x);
 };
 
+//----------------------------------------------------------------------------------------
+// xl11
+
+static PyObject* 
+roche_xl11(PyObject *self, PyObject *args)
+{
+    double q, spin;
+    if(!PyArg_ParseTuple(args, "dd:roche.xl11", &q, &spin))
+	return NULL;
+    if(q < 0){
+	PyErr_SetString(PyExc_ValueError, "roche.xl11: q <= 0");
+	return NULL;
+    }
+    double x = Roche::xl11(q,spin);
+    return Py_BuildValue("f", x);
+};
+
+//----------------------------------------------------------------------------------------
+// xl12
+
+static PyObject* 
+roche_xl12(PyObject *self, PyObject *args)
+{
+    double q, spin;
+    if(!PyArg_ParseTuple(args, "dd:roche.xl12", &q, &spin))
+	return NULL;
+    if(q < 0){
+	PyErr_SetString(PyExc_ValueError, "roche.xl12: q <= 0");
+	return NULL;
+    }
+    double x = Roche::xl12(q,spin);
+    return Py_BuildValue("f", x);
+};
 
 //----------------------------------------------------------------------------------------
 // The methods
@@ -1028,7 +1091,15 @@ static PyMethodDef RocheMethods[] = {
      " pref   -- the potential to aim for.\n"
      " star   -- 1 or 2 for primary or secondary star."
      " acc    -- accuracy in terms of separation of location."
-},
+    },
+
+    {"ref_sphere", roche_ref_sphere, METH_VARARGS, 
+     "(rref,pref) = ref_sphere(q, spin, ffac, star=2), returns reference radius and potential needed for face.\n\n"
+     " q      -- mass ratio = M2/M1\n"
+     " spin   -- ratio spin/orbital frequency\n"
+     " ffac   -- linear filling factor of star in question.\n"
+     " star   -- 1 or 2 for primary or secondary star."
+    },
 
 
     {"findi", roche_findi, METH_VARARGS, 
@@ -1098,6 +1169,12 @@ static PyMethodDef RocheMethods[] = {
 
     {"xl3", roche_xl3, METH_VARARGS, 
      "xl3(q), q = M2/M1. Calculate the L3 point distance."},
+
+    {"xl11", roche_xl11, METH_VARARGS, 
+     "xl11(q,spin), q = M2/M1, spin = spin/orbital of primary. Calculate the inner Lagrangian point distance with asynchronous primary."},
+
+    {"xl12", roche_xl12, METH_VARARGS, 
+     "xl12(q,spin), q = M2/M1, spin = spin/orbital of secondary. Calculate the inner Lagrangian point distance with asynchronous secondary."},
 
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
