@@ -23,6 +23,8 @@ lobe1     -- the primary star's Roche lobe
 lobe2     -- the secondary star's Roche lobe
 qirbs     -- computes mass ratio, inclination and radius from bright-spot phases
 rpot      -- computes Roche potential of a point
+rpot1     -- computes asynchronous Roche potential for star 1
+rpot2     -- computes asynchronous Roche potential for star 2
 shadow    -- returns arrays representing the eclipsed region at a given phase
 stream    -- the gas stream's path in position space
 streamr   -- the gas stream's path in position space to a given radius

@@ -47,10 +47,10 @@ static PyObject*
 roche_face(PyObject *self, PyObject *args)
 {
     
-    double q, x, y, z, rref, pref;
+    double q, spin, x, y, z, rref, pref;
     double acc=1.e-5;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "dddddd|id", &q, &x, &y, &z, &rref, &pref, &star, &acc))
+    if(!PyArg_ParseTuple(args, "ddddddd|id", &q, &spin, &x, &y, &z, &rref, &pref, &star, &acc))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.face: q <= 0");
@@ -72,7 +72,7 @@ roche_face(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 dirn(x,y,z), pvec, dvec;
     double r, g;
-    Roche::face(q, dirn, rref, pref, acc, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, pvec, dvec, r, g);
+    Roche::face(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, dirn, rref, pref, acc, pvec, dvec, r, g);
     return Py_BuildValue("(ddd)(ddd)dd", pvec.x(), pvec.y(), pvec.z(), dvec.x(), dvec.y(), dvec.z(), r, g);
 };
 
@@ -110,8 +110,8 @@ roche_findi(PyObject *self, PyObject *args)
     Subs::Vec3 earth1 = Roche::set_earth(ilo, phi);
     Subs::Vec3 earth2 = Roche::set_earth(ihi, phi);
     Subs::Vec3 r;
-    bool elo = Roche::fblink(q, earth1, r, Roche::SECONDARY, 1.0, acc); 
-    bool ehi = Roche::fblink(q, earth2, r, Roche::SECONDARY, 1.0, acc); 
+    bool elo = Roche::fblink(q, Roche::SECONDARY, 1.0, 1.0, acc, earth1, r); 
+    bool ehi = Roche::fblink(q, Roche::SECONDARY, 1.0, 1.0, acc, earth2, r); 
 
     double iangle;
     if(elo && ehi){
@@ -121,7 +121,7 @@ roche_findi(PyObject *self, PyObject *args)
     }else{
 	while(ihi - ilo > di){
 	    iangle = (ilo+ihi)/2.;
-	    if(Roche::fblink(q, Roche::set_earth(iangle, phi), r, Roche::SECONDARY, 1.0, acc))
+	    if(Roche::fblink(q, Roche::SECONDARY, 1.0, 1.0, acc, Roche::set_earth(iangle, phi), r))
 		ihi = iangle;
 	    else
 		ilo = iangle;
@@ -161,8 +161,8 @@ roche_findq(PyObject *self, PyObject *args)
     Subs::Vec3 r;
     double phi = pwidth/2.;
     Subs::Vec3 earth = Roche::set_earth(iangle, phi);
-    bool elo = Roche::fblink(qlo, earth, r, Roche::SECONDARY, 1.0, acc); 
-    bool ehi = Roche::fblink(qhi, earth, r, Roche::SECONDARY, 1.0, acc); 
+    bool elo = Roche::fblink(qlo, Roche::SECONDARY, 1.0, 1.0, acc, earth, r); 
+    bool ehi = Roche::fblink(qhi, Roche::SECONDARY, 1.0, 1.0, acc, earth, r); 
 
     double q;
     if(elo && ehi){
@@ -172,7 +172,7 @@ roche_findq(PyObject *self, PyObject *args)
     }else{
 	while(qhi - qlo > dq){
 	    q = (qlo+qhi)/2.;
-	    if(Roche::fblink(q, earth, r, Roche::SECONDARY, 1.0, acc))
+	    if(Roche::fblink(q, Roche::SECONDARY, 1.0, 1.0, acc, earth, r))
 		qhi = q;
 	    else
 		qlo = q;
@@ -207,7 +207,7 @@ roche_findphi(PyObject *self, PyObject *args)
 
     Subs::Vec3 r(0,0,0);
     double ingress, egress;
-    if(!Roche::ingress_egress(q, 1.0, iangle, r, ingress, egress, delta, Roche::SECONDARY)){
+    if(!Roche::ingress_egress(q, Roche::SECONDARY, 1.0, 1.0, iangle, delta, r, ingress, egress)){
 	PyErr_SetString(PyExc_ValueError, "roche.findphi: the centre of mass of the white dwarf is not eclipsed");
 	return NULL;
     }
@@ -222,9 +222,9 @@ roche_fblink(PyObject *self, PyObject *args)
 {
     
     double q, iangle, x, y, z, phi;
-    double ffac=1., acc=1.e-4;
+    double ffac=1., acc=1.e-4, spin = 1.0;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "dddddd|ddi", &q, &iangle, &phi, &x, &y, &z, &ffac, &acc, &star))
+    if(!PyArg_ParseTuple(args, "dddddd|ddid", &q, &iangle, &phi, &x, &y, &z, &ffac, &acc, &star, &spin))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.fblink: q <= 0");
@@ -250,8 +250,7 @@ roche_fblink(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 r(x,y,z);
     int eclipse;
-    if(Roche::fblink(q, Roche::set_earth(iangle, phi), r, 
-		     star == 1 ? Roche::PRIMARY : Roche::SECONDARY, ffac, acc))
+    if(Roche::fblink(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, ffac, acc, Roche::set_earth(iangle, phi), r))
 	eclipse = 1;
     else
 	eclipse = 0;
@@ -266,9 +265,9 @@ roche_ineg(PyObject *self, PyObject *args)
 {
     
     double q, iangle, x, y, z=0.;
-    double ffac=1., delta=1.e-7;
+    double ffac=1., delta=1.e-7, spin = 1.0;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "dddd|dddi", &q, &iangle, &x, &y, &z, &ffac, &delta, &star))
+    if(!PyArg_ParseTuple(args, "dddd|dddid", &q, &iangle, &x, &y, &z, &ffac, &delta, &star, &spin))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.ineg: q <= 0");
@@ -294,7 +293,7 @@ roche_ineg(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 r(x,y,z);
     double ingress, egress;
-    if(!Roche::ingress_egress(q, ffac, iangle, r, ingress, egress, delta, star == 1 ? Roche::PRIMARY : Roche::SECONDARY)){
+    if(!Roche::ingress_egress(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, ffac, iangle, delta, r, ingress, egress)){
 	PyErr_SetString(PyExc_ValueError, "roche.ineg: point is not eclipsed");
 	return NULL;
     }
@@ -407,6 +406,48 @@ roche_rpot(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 p(x,y,z);
     double rp = Roche::rpot(q, p);
+    return Py_BuildValue("d", rp);
+};
+
+//----------------------------------------------------------------------------------------
+// Computes Roche potential for star 1 asynchronous
+
+static PyObject* 
+roche_rpot1(PyObject *self, PyObject *args)
+{
+    
+    double q, spin, x, y, z;
+    if(!PyArg_ParseTuple(args, "ddddd", &q, &spin, &x, &y, &z))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    Subs::Vec3 p(x,y,z);
+    double rp = Roche::rpot1(q, spin, p);
+    return Py_BuildValue("d", rp);
+};
+
+//----------------------------------------------------------------------------------------
+// Computes Roche potential for star 2 asynchronous
+
+static PyObject* 
+roche_rpot2(PyObject *self, PyObject *args)
+{
+    
+    double q, spin, x, y, z;
+    if(!PyArg_ParseTuple(args, "ddddd", &q, &spin, &x, &y, &z))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
+	return NULL;
+    }
+
+    // Compute Roche lobe
+    Subs::Vec3 p(x,y,z);
+    double rp = Roche::rpot2(q, spin, p);
     return Py_BuildValue("d", rp);
 };
 
@@ -979,8 +1020,9 @@ static PyMethodDef RocheMethods[] = {
     },
 
     {"face", roche_face, METH_VARARGS, 
-     "face(q, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
+     "face(q, spin, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
      " q      -- mass ratio = M2/M1\n"
+     " spin   -- ratio spin/orbital frequency\n"
      " x,y,z  -- direction to take from centre of mass of star in question.\n"
      " rref   -- reference radius greater than any radius of potential in question.\n"
      " pref   -- the potential to aim for.\n"
@@ -999,10 +1041,10 @@ static PyMethodDef RocheMethods[] = {
      "findphi(q, i, delta=1.e-6), computes deltaphi for a given mass ratio and inclination"},
 
     {"fblink", roche_fblink, METH_VARARGS, 
-     "fblink(q, i, phi, x, y, z, ffac=1., acc=1.e-4, star=2), computes whether a point is eclipsed or not"},
+     "fblink(q, i, phi, x, y, z, ffac=1., acc=1.e-4, star=2, spin=1), computes whether a point is eclipsed or not"},
 
     {"ineg", roche_ineg, METH_VARARGS, 
-     "(in,out) = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2), computes ingress and egress phase of a point"},
+     "(in,out) = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2, spin=1), computes ingress and egress phase of a point"},
 
     {"lobe1", roche_lobe1, METH_VARARGS, 
      "(x,y) = lobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe."},
@@ -1012,6 +1054,12 @@ static PyMethodDef RocheMethods[] = {
 
     {"rpot", roche_rpot, METH_VARARGS, 
      "rp = rpot(q, x, y, z), q = M2/M1. Returns Roche potential at (x,y,z)."},
+
+    {"rpot1", roche_rpot1, METH_VARARGS, 
+     "rp = rpot1(q, spin, x, y, z), q = M2/M1. Returns asynchronous Roche potential for star 1 at (x,y,z), spin = spin/orbital"},
+
+    {"rpot2", roche_rpot2, METH_VARARGS, 
+     "rp = rpot2(q, spin, x, y, z), q = M2/M1. Returns asynchronous Roche potential for star 2 at (x,y,z), spin = spin/orbital"},
 
     {"shadow", roche_shadow, METH_VARARGS, 
      "(x,y,s) = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
