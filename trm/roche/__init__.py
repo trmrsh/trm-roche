@@ -12,31 +12,34 @@ Lagrangian point.
 Functions
 =========
 
-bsphases  -- computes ingress & egress phases of bright-spot
-face      -- computes position, orientation and gravity of element of specified Roche potential
-fblink    -- computes whether a point is eclipsed or not
-findi     -- computes inclination given mass ratio and deltaphi
-findq     -- computes mass ratio given deltaphi and inclination
-findphi   -- computes deltaphi given mass ratio and inclination
-ineg      -- calculate the ingress/egress phase of a given point.
-lobe1     -- the primary star's Roche lobe
-lobe2     -- the secondary star's Roche lobe
-qirbs     -- computes mass ratio, inclination and radius from bright-spot phases
-rpot      -- computes Roche potential of a point
-rpot1     -- computes asynchronous Roche potential for star 1
-rpot2     -- computes asynchronous Roche potential for star 2
-shadow    -- returns arrays representing the eclipsed region at a given phase
-stream    -- the gas stream's path in position space
-streamr   -- the gas stream's path in position space to a given radius
-strmnx    -- position and velocity of n-th turning point of gas stream
-vlobe1    -- the primary star's Roche lobe, velocity space
-vlobe2    -- the secondary star's Roche lobe, velocity space
-vstream   -- gas stream in velocity coordinates
-wdphases  -- computes white dwarf third and fourth contact phases
-wdradius  -- computes scaled white dwarf radius give mass ratio, inclination, egress phase width
-xl1       -- L1 position
-xl2       -- L2 position
-xl3       -- L3 position
+bsphases   -- computes ingress & egress phases of bright-spot
+face       -- computes position, orientation and gravity of element of specified Roche potential
+fblink     -- computes whether a point is eclipsed or not
+findi      -- computes inclination given mass ratio and deltaphi
+findq      -- computes mass ratio given deltaphi and inclination
+findphi    -- computes deltaphi given mass ratio and inclination
+ineg       -- calculate the ingress/egress phase of a given point.
+lobe1      -- the primary star's Roche lobe
+lobe2      -- the secondary star's Roche lobe
+qirbs      -- computes mass ratio, inclination and radius from bright-spot phases
+ref_sphere -- computes reference radius and potential given a filling factor
+rpot       -- computes Roche potential of a point
+rpot1      -- computes asynchronous Roche potential for star 1
+rpot2      -- computes asynchronous Roche potential for star 2
+shadow     -- returns arrays representing the eclipsed region at a given phase
+stream     -- the gas stream's path in position space
+streamr    -- the gas stream's path in position space to a given radius
+strmnx     -- position and velocity of n-th turning point of gas stream
+vlobe1     -- the primary star's Roche lobe, velocity space
+vlobe2     -- the secondary star's Roche lobe, velocity space
+vstream    -- gas stream in velocity coordinates
+wdphases   -- computes white dwarf third and fourth contact phases
+wdradius   -- computes scaled white dwarf radius give mass ratio, inclination, egress phase width
+xl1        -- L1 position
+xl2        -- L2 position
+xl3        -- L3 position
+xl11       -- L1 position, asynchronous primary
+xl12       -- L1 position, asynchronous secondary
 
 Classes
 =======
