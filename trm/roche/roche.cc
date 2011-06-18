@@ -48,7 +48,7 @@ roche_face(PyObject *self, PyObject *args)
 {
     
     double q, spin, x, y, z, rref, pref;
-    double acc=1.e-5;
+    double acc=1.e-9;
     int star = 2;
     if(!PyArg_ParseTuple(args, "ddddddd|id", &q, &spin, &x, &y, &z, &rref, &pref, &star, &acc))
 	return NULL;
@@ -72,8 +72,14 @@ roche_face(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Subs::Vec3 dirn(x,y,z), pvec, dvec;
     double r, g;
-    Roche::face(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, dirn, rref, pref, acc, pvec, dvec, r, g);
-    return Py_BuildValue("(ddd)(ddd)dd", pvec.x(), pvec.y(), pvec.z(), dvec.x(), dvec.y(), dvec.z(), r, g);
+    try{
+      Roche::face(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, dirn, rref, pref, acc, pvec, dvec, r, g);
+      return Py_BuildValue("(ddd)(ddd)dd", pvec.x(), pvec.y(), pvec.z(), dvec.x(), dvec.y(), dvec.z(), r, g);
+    }
+    catch(const Roche::Roche_Error& err){
+      PyErr_SetString(PyExc_ValueError, ("roche.face: " + err).c_str());
+      return NULL;
+    }
 };
 
 //----------------------------------------------------------------------------------------
@@ -1083,21 +1089,25 @@ static PyMethodDef RocheMethods[] = {
     },
 
     {"face", roche_face, METH_VARARGS, 
-     "face(q, spin, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
+     "p,d,r,g = face(q, spin, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
      " q      -- mass ratio = M2/M1\n"
      " spin   -- ratio spin/orbital frequency\n"
      " x,y,z  -- direction to take from centre of mass of star in question.\n"
      " rref   -- reference radius greater than any radius of potential in question.\n"
      " pref   -- the potential to aim for.\n"
      " star   -- 1 or 2 for primary or secondary star."
-     " acc    -- accuracy in terms of separation of location."
+     " acc    -- accuracy in terms of separation of location.\n"
+     "Returns p = position, d = direction perpendicular to face, r = radius from centre of mass, g = gravity."
     },
 
     {"ref_sphere", roche_ref_sphere, METH_VARARGS, 
      "(rref,pref) = ref_sphere(q, spin, ffac, star=2), returns reference radius and potential needed for face.\n\n"
      " q      -- mass ratio = M2/M1\n"
      " spin   -- ratio spin/orbital frequency\n"
-     " ffac   -- linear filling factor of star in question.\n"
+     " ffac   -- linear filling factor of star in question, defined as the radius of the star along the line of\n"
+     "           centres towards its companion divided by the Roche lobe radius in that direction. For spin = 1\n"
+     "           the latter is simply the distance to the L1 point, but otherwise you need to use modified L1\n"
+     "           radii as returned by xl11 or xl12.\n"
      " star   -- 1 or 2 for primary or secondary star."
     },
 
