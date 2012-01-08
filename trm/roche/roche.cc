@@ -658,6 +658,105 @@ roche_stream(PyObject *self, PyObject *args)
 
 };
 
+/* arbitrary stream integration from user-defined starting point */
+
+static PyObject* 
+roche_astream(PyObject *self, PyObject *args)
+{
+    double q, xi, yi, zi, vx, vy, vz, step;
+    double acc=1.e-9;
+    int n = 200, type;
+    if(!PyArg_ParseTuple(args, "diddddddd|id", &q, &type, &xi, &yi, &zi, 
+			 &vx, &vy, &vz, &step, &n, &acc))
+	return NULL;
+    if(q <= 0.){
+	PyErr_SetString(PyExc_ValueError, "roche.astream: q <= 0");
+	return NULL;
+    }
+    if(type < 0 || type > 3){
+	PyErr_SetString(PyExc_ValueError, "roche.astream: type out of range 0 to 3");
+	return NULL;
+    }
+    if(step <= 0. || step > 1.){
+	PyErr_SetString(PyExc_ValueError, "roche.astream: step <= 0 or > 1.");
+	return NULL;
+    }
+    if(n < 2){
+	PyErr_SetString(PyExc_ValueError, "roche.astream: n < 2");
+	return NULL;
+    }
+    if(acc <= 0. || acc > 0.1){
+	PyErr_SetString(PyExc_ValueError, 
+			"roche.astream: acc <= 0 or acc > 0.1");
+	return NULL;
+    }
+
+    // Create output array containing both x and y arrays.
+    npy_intp dim[1] = {n};
+
+    PyArrayObject* xo = NULL;
+    xo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(xo == NULL) return NULL;
+
+    PyArrayObject* yo = NULL;
+    yo = (PyArrayObject*) PyArray_SimpleNew(1, dim, PyArray_FLOAT);
+    if(yo == NULL){
+	Py_DECREF(xo);
+	return NULL;
+    }
+
+    float* ax = (float*)xo->data;
+    float* ay = (float*)yo->data;
+
+    // Carry out the stream integration
+    try{
+	Subs::Vec3 r(xi,yi,xi), v(vx,vy,vz);
+	double xold = r.x(), yold = r.y(), apx, apy;
+	if(type == 0){
+	    ax[0] = xold;
+	    ay[0] = yold;
+	}else{
+	    Roche::vtrans(q, type, r.x(), r.y(), v.x(), v.y(), apx, apy);
+	    ax[0] = apx;
+	    ay[0] = apy;
+	}
+	int lp = 0;
+	
+	double time, dist, tdid, tnext, frac, ttry;
+	double vel, smax = std::min(1.e-3,step/2.);
+
+	vel  = sqrt(Subs::sqr(v.x()) + Subs::sqr(v.y()));
+	ttry = smax/std::max(1.e20, vel);
+	while(lp < n-1){
+	    Roche::gsint(q, r, v, ttry, tdid, tnext, time, acc);
+	    dist = sqrt(Subs::sqr(r.x()-xold)+Subs::sqr(r.y()-yold));
+	    if(dist > step){
+		frac = step / dist;
+		if(type == 0){
+		    ax[lp+1] = ax[lp] + (r.x()-ax[lp])*frac;
+		    ay[lp+1] = ay[lp] + (r.y()-ay[lp])*frac;
+		}else{
+		    Roche::vtrans(q, type, r.x(), r.y(), v.x(), v.y(), apx, apy);
+		    ax[lp+1] = ax[lp] + (apx-ax[lp])*frac;
+		    ay[lp+1] = ay[lp] + (apy-ay[lp])*frac;
+		}
+		xold = r.x();
+		yold = r.y();
+		lp++;		
+	    }
+	    vel  = sqrt(Subs::sqr(v.x()) + Subs::sqr(v.y()));
+	    ttry = std::min(smax/vel, tnext);
+	}
+    }
+    catch(const Roche::Roche_Error &err){
+	PyErr_SetString(PyExc_ValueError, ("roche.astream: " + err).c_str());
+	return NULL;
+    }
+
+    return Py_BuildValue("OO", xo, yo);
+
+};
+
 //----------------------------------------------------------------------------------------
 // strmnx
 
@@ -1080,6 +1179,13 @@ roche_xl12(PyObject *self, PyObject *args)
 
 static PyMethodDef RocheMethods[] = {
 
+    {"astream", roche_astream, METH_VARARGS, 
+     "(x,y) = astream(q, type, x, y, z, vx, vy, vz, step, n=200, acc=1.e-9), returns\n"
+     "arrays of the gas stream given arbitrary initial conditions, x,y,z, vx,vy,vz\n"
+     "q = M2/M1, step=distance between adjacent points, n= number of points, acc=\n."
+     "accuracy of calculations. type =0, 1, 2 or 3. 0 gives x,y positions, 1,2,3 give\n"
+     "different velocities -- see vstream for more detail.\n."
+    },
 
     {"bspot", roche_bspot, METH_VARARGS, 
      "(x,y,vx,vy) = bspot(q, rad, acc=1.e-7), returns position and stream velocity on stream at radius rad\n\n"
