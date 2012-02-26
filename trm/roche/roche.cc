@@ -6,6 +6,40 @@
 #include "numpy/arrayobject.h"
 #include "trm_roche.h"
 
+// Helper functions
+
+static int rconv(PyObject* obj, void* p) {
+
+    // Converter function. Assumes that 'obj' points to a 
+    // subs.Vec3 from Python and uses it to set the value of
+    // a Subs::Vec3 pointed to by p (must be set up by the
+    // calling routine). For use in combination with 
+    // PyArg_ParseTuple and "O&".
+    
+    PyObject* px = PyObject_GetAttrString(obj, "x");
+    PyObject* py = PyObject_GetAttrString(obj, "y");
+    PyObject* pz = PyObject_GetAttrString(obj, "z");
+
+    int status = 0;
+
+    if(px && py && pz){
+	// Next functions can convert integers to doubles
+	double x = PyFloat_AsDouble(px);
+	double y = PyFloat_AsDouble(py);
+	double z = PyFloat_AsDouble(pz);
+	if(!PyErr_Occurred()){
+	    ((Subs::Vec3*)p)->set(x,y,z);
+	    status = 1;
+	}
+    }
+
+    Py_XDECREF(px);
+    Py_XDECREF(py);
+    Py_XDECREF(pz);
+
+    return status;
+}
+    
 //----------------------------------------------------------------------------------------
 // bspot returns position of bright-spot
 
@@ -47,10 +81,11 @@ static PyObject*
 roche_face(PyObject *self, PyObject *args)
 {
     
-    double q, spin, x, y, z, rref, pref;
+    double q, spin, rref, pref;
+    Subs::Vec3 dirn;
     double acc=1.e-9;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "ddddddd|id", &q, &spin, &x, &y, &z, &rref, &pref, &star, &acc))
+    if(!PyArg_ParseTuple(args, "ddO&dd|id", &q, &spin, rconv, (void*)&dirn, &rref, &pref, &star, &acc))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.face: q <= 0");
@@ -70,7 +105,7 @@ roche_face(PyObject *self, PyObject *args)
     }
 
     // Compute Roche lobe
-    Subs::Vec3 dirn(x,y,z), pvec, dvec;
+    Subs::Vec3 pvec, dvec;
     double r, g;
     try{
       Roche::face(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, dirn, rref, pref, acc, pvec, dvec, r, g);
@@ -431,16 +466,17 @@ static PyObject*
 roche_rpot(PyObject *self, PyObject *args)
 {
     
-    double q, x, y, z;
-    if(!PyArg_ParseTuple(args, "dddd", &q, &x, &y, &z))
+    double q;
+    Subs::Vec3 p;
+    if(!PyArg_ParseTuple(args, "dO&", &q, rconv, (void*)&p))
 	return NULL;
+
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
 	return NULL;
     }
 
     // Compute Roche lobe
-    Subs::Vec3 p(x,y,z);
     double rp = Roche::rpot(q, p);
     return Py_BuildValue("d", rp);
 };
@@ -452,16 +488,15 @@ static PyObject*
 roche_rpot1(PyObject *self, PyObject *args)
 {
     
-    double q, spin, x, y, z;
-    if(!PyArg_ParseTuple(args, "ddddd", &q, &spin, &x, &y, &z))
+    double q, spin;
+    Subs::Vec3 p;
+    if(!PyArg_ParseTuple(args, "ddO&", &q, &spin, rconv, (void*)&p))
 	return NULL;
     if(q <= 0.){
-	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
+	PyErr_SetString(PyExc_ValueError, "roche.rpot1: q <= 0");
 	return NULL;
     }
 
-    // Compute Roche lobe
-    Subs::Vec3 p(x,y,z);
     double rp = Roche::rpot1(q, spin, p);
     return Py_BuildValue("d", rp);
 };
@@ -473,16 +508,15 @@ static PyObject*
 roche_rpot2(PyObject *self, PyObject *args)
 {
     
-    double q, spin, x, y, z;
-    if(!PyArg_ParseTuple(args, "ddddd", &q, &spin, &x, &y, &z))
+    double q, spin;
+    Subs::Vec3 p;
+    if(!PyArg_ParseTuple(args, "ddO&", &q, &spin, rconv, (void*)&p))
 	return NULL;
     if(q <= 0.){
-	PyErr_SetString(PyExc_ValueError, "roche.rpot: q <= 0");
+	PyErr_SetString(PyExc_ValueError, "roche.rpot2: q <= 0");
 	return NULL;
     }
 
-    // Compute Roche lobe
-    Subs::Vec3 p(x,y,z);
     double rp = Roche::rpot2(q, spin, p);
     return Py_BuildValue("d", rp);
 };
@@ -663,11 +697,12 @@ roche_stream(PyObject *self, PyObject *args)
 static PyObject* 
 roche_astream(PyObject *self, PyObject *args)
 {
-    double q, xi, yi, zi, vx, vy, vz, step;
+    double q, step;
     double acc=1.e-9;
     int n = 200, type;
-    if(!PyArg_ParseTuple(args, "diddddddd|id", &q, &type, &xi, &yi, &zi, 
-			 &vx, &vy, &vz, &step, &n, &acc))
+    Subs::Vec3 r, v;
+    if(!PyArg_ParseTuple(args, "diO&O&d|id", &q, &type, rconv, (void*)&r, 
+			 rconv, (void*)&v, &step, &n, &acc))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.astream: q <= 0");
@@ -710,7 +745,6 @@ roche_astream(PyObject *self, PyObject *args)
 
     // Carry out the stream integration
     try{
-	Subs::Vec3 r(xi,yi,xi), v(vx,vy,vz);
 	double xold = r.x(), yold = r.y(), apx, apy;
 	if(type == 0){
 	    ax[0] = xold;
@@ -1180,8 +1214,8 @@ roche_xl12(PyObject *self, PyObject *args)
 static PyMethodDef RocheMethods[] = {
 
     {"astream", roche_astream, METH_VARARGS, 
-     "(x,y) = astream(q, type, x, y, z, vx, vy, vz, step, n=200, acc=1.e-9), returns\n"
-     "arrays of the gas stream given arbitrary initial conditions, x,y,z, vx,vy,vz\n"
+     "(x,y) = astream(q, type, r, v, step, n=200, acc=1.e-9), returns\n"
+     "arrays of the gas stream given arbitrary initial conditions, r, v\n"
      "q = M2/M1, step=distance between adjacent points, n= number of points, acc=\n."
      "accuracy of calculations. type =0, 1, 2 or 3. 0 gives x,y positions, 1,2,3 give\n"
      "different velocities -- see vstream for more detail.\n."
@@ -1195,10 +1229,10 @@ static PyMethodDef RocheMethods[] = {
     },
 
     {"face", roche_face, METH_VARARGS, 
-     "p,d,r,g = face(q, spin, x, y, z, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
+     "p,d,r,g = face(q, spin, dirn, rref, pref, star=2, acc=1.e-5), returns position and direction of element of specific Roche potential.\n\n"
      " q      -- mass ratio = M2/M1\n"
      " spin   -- ratio spin/orbital frequency\n"
-     " x,y,z  -- direction to take from centre of mass of star in question.\n"
+     " dirn   -- direction (a Vec3) to take from centre of mass of star in question.\n"
      " rref   -- reference radius greater than any radius of potential in question.\n"
      " pref   -- the potential to aim for.\n"
      " star   -- 1 or 2 for primary or secondary star."
@@ -1240,13 +1274,13 @@ static PyMethodDef RocheMethods[] = {
      "(x,y) = lobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe."},
 
     {"rpot", roche_rpot, METH_VARARGS, 
-     "rp = rpot(q, x, y, z), q = M2/M1. Returns Roche potential at (x,y,z)."},
+     "rp = rpot(q, r), q = M2/M1. Returns Roche potential at position r."},
 
     {"rpot1", roche_rpot1, METH_VARARGS, 
-     "rp = rpot1(q, spin, x, y, z), q = M2/M1. Returns asynchronous Roche potential for star 1 at (x,y,z), spin = spin/orbital"},
+     "rp = rpot1(q, spin, r), q = M2/M1. Returns asynchronous Roche potential for star 1 at position r, spin = spin/orbital"},
 
     {"rpot2", roche_rpot2, METH_VARARGS, 
-     "rp = rpot2(q, spin, x, y, z), q = M2/M1. Returns asynchronous Roche potential for star 2 at (x,y,z), spin = spin/orbital"},
+     "rp = rpot2(q, spin, r), q = M2/M1. Returns asynchronous Roche potential for star 2 at position r, spin = spin/orbital"},
 
     {"shadow", roche_shadow, METH_VARARGS, 
      "(x,y,s) = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
