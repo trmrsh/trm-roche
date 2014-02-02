@@ -292,10 +292,11 @@ static PyObject*
 roche_fblink(PyObject *self, PyObject *args)
 {
     
-    double q, iangle, x, y, z, phi;
+    double q, iangle, phi;
+    Subs::Vec3 r;
     double ffac=1., acc=1.e-4, spin = 1.0;
     int star = 2;
-    if(!PyArg_ParseTuple(args, "dddddd|ddid", &q, &iangle, &phi, &x, &y, &z, &ffac, &acc, &star, &spin))
+    if(!PyArg_ParseTuple(args, "dddO&|ddid", &q, &iangle, &phi, rconv, (void*)&r, &ffac, &acc, &star, &spin))
 	return NULL;
     if(q <= 0.){
 	PyErr_SetString(PyExc_ValueError, "roche.fblink: q <= 0");
@@ -319,7 +320,6 @@ roche_fblink(PyObject *self, PyObject *args)
     }
 
     // Compute Roche lobe
-    Subs::Vec3 r(x,y,z);
     int eclipse;
     if(Roche::fblink(q, star == 1 ? Roche::PRIMARY : Roche::SECONDARY, spin, ffac, acc, Roche::set_earth(iangle, phi), r))
 	eclipse = 1;
@@ -411,7 +411,7 @@ roche_lobe1(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Roche::lobe1(q, x, y, n);
 
-    return Py_BuildValue("OO", xo, yo);
+    return Py_BuildValue("NN", xo, yo);
 
 };
 
@@ -455,7 +455,7 @@ roche_lobe2(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Roche::lobe2(q, x, y, n);
 
-    return Py_BuildValue("OO", xo, yo);
+    return Py_BuildValue("NN", xo, yo);
 
 };
 
@@ -582,7 +582,7 @@ roche_shadow(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Roche::roche_shadow(q, iangle, phi, dist, acc, x, y, s, n);
 
-    return Py_BuildValue("OOO",xo,yo,so);
+    return Py_BuildValue("NNN",xo,yo,so);
 
 };
 
@@ -637,7 +637,7 @@ roche_streamr(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return Py_BuildValue("OO", xo, yo);
+    return Py_BuildValue("NN", xo, yo);
 
 };
 
@@ -688,7 +688,7 @@ roche_stream(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return Py_BuildValue("OO", xo, yo);
+    return Py_BuildValue("NN", xo, yo);
 
 };
 
@@ -787,7 +787,7 @@ roche_astream(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return Py_BuildValue("OO", xo, yo);
+    return Py_BuildValue("NN", xo, yo);
 
 };
 
@@ -863,7 +863,7 @@ roche_vlobe1(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Roche::vlobe1(q, vx, vy, n);
 
-    return Py_BuildValue("OO", vxo, vyo);
+    return Py_BuildValue("NN", vxo, vyo);
 
 };
 
@@ -908,7 +908,7 @@ roche_vlobe2(PyObject *self, PyObject *args)
     // Compute Roche lobe
     Roche::vlobe2(q, vx, vy, n);
 
-    return Py_BuildValue("OO", vxo, vyo);
+    return Py_BuildValue("NN", vxo, vyo);
 
 };
 
@@ -967,7 +967,7 @@ roche_vstream(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return Py_BuildValue("OO", vxo, vyo);
+    return Py_BuildValue("NN", vxo, vyo);
 
 };
 
@@ -1119,7 +1119,7 @@ roche_pvstream(PyObject *self, PyObject *args)
 	return NULL;
     }
 
-    return Py_BuildValue("OOOOO", xo, yo, vxo, vyo, jco);
+    return Py_BuildValue("NNNNN", xo, yo, vxo, vyo, jco);
 
 };
 
@@ -1262,7 +1262,7 @@ static PyMethodDef RocheMethods[] = {
      "findphi(q, i, delta=1.e-6), computes deltaphi for a given mass ratio and inclination"},
 
     {"fblink", roche_fblink, METH_VARARGS, 
-     "fblink(q, i, phi, x, y, z, ffac=1., acc=1.e-4, star=2, spin=1), computes whether a point is eclipsed or not"},
+     "fblink(q, i, phi, r, ffac=1., acc=1.e-4, star=2, spin=1), computes whether a point is eclipsed or not"},
 
     {"ineg", roche_ineg, METH_VARARGS, 
      "(in,out) = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2, spin=1), computes ingress and egress phase of a point"},
