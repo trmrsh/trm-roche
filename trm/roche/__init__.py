@@ -21,6 +21,7 @@ findphi    -- computes deltaphi given mass ratio and inclination
 ineg       -- calculate the ingress/egress phase of a given point.
 lobe1      -- the primary star's Roche lobe
 lobe2      -- the secondary star's Roche lobe
+pvstream   -- produce position and velocity arrays of a stream
 qirbs      -- computes mass ratio, inclination and radius from bright-spot phases
 ref_sphere -- computes reference radius and potential given a filling factor
 rpot       -- computes Roche potential of a point
@@ -151,9 +152,8 @@ def qirbs(deltaphi, pbi, pbe, ilo=78., ns=200):
     # Compute the radius of the bright-spot and return
     rbs = m.sqrt((xs[imin]+lam*(xs[imin+1]-xs[imin]))**2+(ys[imin]+lam*(ys[imin+1]-ys[imin]))**2)
     return (q,iangle,rbs)
-
-
-def wdphases(q, iangle, r1, ntheta=100):
+    
+def wdphases(q, iangle, r1, r2=-1, ntheta=100):
     """
     (phi3,phi4) = wdphases(q, iangle, r1, ntheta=100)
 
@@ -162,6 +162,7 @@ def wdphases(q, iangle, r1, ntheta=100):
     q      -- mass ratio = M2/M1
     iangle -- orbital inclination, degrees
     r1     -- scaled white dwarf radius = R1/a
+    r2     -- scaled secondary radius, < 0 for Roche lobe filling
     ntheta -- number of angles to compute at the limb of white dwarf.
 
     The routine searches points equally-spaced at quadrants of the limb
@@ -170,6 +171,11 @@ def wdphases(q, iangle, r1, ntheta=100):
     there will be a valid 'fourth' contact (marking the end of eclipse still) 
     but the third contact will be set = -1.
     """
+
+    if r2 <= 0.:
+        ffac = 1.
+    else:
+        ffac = r2/(1.-xl1(q))
 
     def xyv(iangle, r1, phase):
         """
@@ -184,43 +190,43 @@ def wdphases(q, iangle, r1, ntheta=100):
         y    = subs.Vec3(-r1*cosi*cosp,-r1*cosi*sinp,r1*sini)
         return (x,y)
 
-    def uneclipsed3(q, iangle, phase, r1, ntheta):
+    def uneclipsed3(q, iangle, phase, r1, ffac, ntheta):
         """
         Says whether any of the upper-left quadrant of the WD is uneclipsed at phase = phase
         'any' means all of the ntheta points computed uniformly around the quadrant. This
         can be used to define the 3rd contact
         """
-        (x,y) = xyv(iangle, r1, phase)
+        x,y = xyv(iangle, r1, phase)
         for i in xrange(ntheta):
             theta = m.pi*i/(ntheta-1)/2.
             v = -x*m.cos(theta) + y*m.sin(theta)
-            if not fblink(q, iangle, phase, v.x, v.y, v.z, 1.0, 1.e-5):
+            if not fblink(q, iangle, phase, v, ffac, 1.e-5):
                 return True
         return False
 
-    def eclipsed4(q, iangle, phase, r1, ntheta):
+    def eclipsed4(q, iangle, phase, r1, ffac, ntheta):
         """
         Says whether any of lower-right quadrant of the WD is eclipsed at phase = phase
         'Any' means any of ntheta points computed uniformly around the quadrant. This
         can be used to define the 4th contact
         """
-        (x,y) = xyv(iangle, r1, phase)
+        x,y = xyv(iangle, r1, phase)
         for i in xrange(ntheta):
             theta = m.pi*i/(ntheta-1)/2.
             v = x*m.cos(theta) - y*m.sin(theta)
-            if fblink(q, iangle, phase, v.x, v.y, v.z, 1.0, 1.e-5):
+            if fblink(q, iangle, phase, v, ffac, 1.e-5):
                 return True
         return False
 
     # fourth contact
     phi4lo   = 0.00
     phi4hi   = 0.25
-    if not eclipsed4(q, iangle, phi4lo, r1, ntheta):
+    if not eclipsed4(q, iangle, phi4lo, r1, ffac, ntheta):
         raise RocheError('roche.wdphases: no eclipse at all for q,i,r1 = ' + str(q) + ',' + str(iangle) + ',' + str(r1))
 
     while phi4hi - phi4lo > r1/ntheta/5.:
         phi4 = (phi4lo+phi4hi)/2.
-        if eclipsed4(q, iangle, phi4, r1, ntheta): 
+        if eclipsed4(q, iangle, phi4, r1, ffac, ntheta): 
             phi4lo = phi4
         else:
             phi4hi = phi4
@@ -228,12 +234,12 @@ def wdphases(q, iangle, r1, ntheta=100):
     # third contact
     phi3lo   = 0.00
     phi3hi   = 0.25
-    if uneclipsed3(q, iangle, phi3lo, r1, ntheta):
+    if uneclipsed3(q, iangle, phi3lo, r1, ffac, ntheta):
         return (-1.,phi4)
 
     while phi3hi - phi3lo > r1/ntheta/5.:
         phi3 = (phi3lo+phi3hi)/2.
-        if uneclipsed3(q, iangle, phi3, r1, ntheta): 
+        if uneclipsed3(q, iangle, phi3, r1, ffac, ntheta): 
             phi3hi = phi3
         else:
             phi3lo = phi3
