@@ -4,7 +4,7 @@
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
-#include "trm_roche.h"
+#include "trm/roche.h"
 
 // Helper functions
 
