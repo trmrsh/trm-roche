@@ -274,6 +274,20 @@ def wdradius(q, iangle, dpwd, ntheta=100, dr=1.e-5, rmax=0.1):
             r1lo = r1
     return (r1lo+r1hi)/2.
 
+def jacobi(q, r, v):
+    """
+    Computes Jacobi constant, more or less total energy per
+    unit mass.
+
+    q : mass ratio = M2/M1
+    r : position vector
+    v : velocity vector
+    """
+    f1  = 1/(1+q)
+    f2  = f1*q
+    sec = subs.Vec3(1,0,0) 
+    return (v.sqnorm()-r.y**2-(r.x-f2)**2)/2.-f1/r.norm()-f2/(r-sec).norm()
+
 # Exception class
 class RocheError(exceptions.Exception):
     """For throwing exceptions from the roche module"""
