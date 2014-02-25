@@ -1266,13 +1266,13 @@ static PyMethodDef RocheMethods[] = {
      "fblink(q, i, phi, r, ffac=1., acc=1.e-4, star=2, spin=1), computes whether a point is eclipsed or not"},
 
     {"ineg", roche_ineg, METH_VARARGS, 
-     "(in,out) = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2, spin=1), computes ingress and egress phase of a point"},
+     "in,out = ineg(q, i, x, y, z=0, ffac=1., delta=1.e-7, star=2, spin=1), computes ingress and egress phase of a point"},
 
     {"lobe1", roche_lobe1, METH_VARARGS, 
-     "(x,y) = lobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe."},
+     "x,y = lobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe."},
 
     {"lobe2", roche_lobe2, METH_VARARGS, 
-     "(x,y) = lobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe."},
+     "x,y = lobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe."},
 
     {"rpot", roche_rpot, METH_VARARGS, 
      "rp = rpot(q, r), q = M2/M1. Returns Roche potential at position r."},
@@ -1284,42 +1284,41 @@ static PyMethodDef RocheMethods[] = {
      "rp = rpot2(q, spin, r), q = M2/M1. Returns asynchronous Roche potential for star 2 at position r, spin = spin/orbital"},
 
     {"shadow", roche_shadow, METH_VARARGS, 
-     "(x,y,s) = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
+     "x,y,s = shadow(q, iangle, phi, n=200, dist=5., acc=1.e-4), q = M2/M1. Returns 2xn array of representing the eclipse shadow region."},
 
     {"streamr", roche_streamr, METH_VARARGS, 
-     "(x,y) = streamr(q, rad, n=200), returns arrays of the gas stream. q = M2/M1, rad = minimum radius to aim for."},
+     "x,y = streamr(q, rad, n=200), returns arrays of the gas stream. q = M2/M1, rad = minimum radius to aim for."},
 
     {"stream", roche_stream, METH_VARARGS, 
-     "(x,y) = stream(q, step, n=200), returns arrays of the gas stream. q = M2/M1, step=distance between adjacent points."},
+     "x,y = stream(q, step, n=200), returns arrays of the gas stream. q = M2/M1, step=distance between adjacent points."},
 
     {"strmnx", roche_strmnx, METH_VARARGS, 
-     "(x,y,vx1,vy1,vx2,vy2) = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream. Two sets of velocities are reported, the first for the pure stream, the second for the disk at that point.\n"},
+     "x,y,vx1,vy1,vx2,vy2 = strmnx(q, n=1, acc=1.e-7), q = M2/M1. Calculates position & velocity of n-th turning point of stream. Two sets of velocities are reported, the first for the pure stream, the second for the disk at that point.\n"},
 
     {"vlobe1", roche_vlobe1, METH_VARARGS, 
      "(vx,vy) = vlobe1(q, n=200), q = M2/M1. Returns arrays of primary star's Roche lobe in velocity space."},
 
     {"vlobe2", roche_vlobe2, METH_VARARGS, 
-     "(vx,vy) = vlobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe in velocity space."},
+     "vx,vy = vlobe2(q, n=200), q = M2/M1. Returns arrays of secondary star's Roche lobe in velocity space."},
 
     {"vstream", roche_vstream, METH_VARARGS, 
-     "(vx,vy) = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space. step is measured as a fraction of the distance to the inner Lagrangian point from the primary star. type=1 is the straight velocity of the gas stream while type=2 is the velocity of the disc along the stream"},
+     "vx,vy = vstream(q, step=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space. step is measured as a fraction of the distance to the inner Lagrangian point from the primary star. type=1 is the straight velocity of the gas stream while type=2 is the velocity of the disc along the stream"},
 
     {"pvstream", roche_pvstream, METH_VARARGS, 
-     "(x, y, vx, vy, jac) = pvstream(q, pstep=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space. pstep is measured as a fraction of the distance to the inner Lagrangian point. jac is the jacobi constant.\n"},
+     "x, y, vx, vy, jac = pvstream(q, pstep=0.01, type=1, n=60), q = M2/M1. Returns arrays of positions of the gas stream in velocity space. pstep is measured as a fraction of the distance to the inner Lagrangian point. jac is the jacobi constant.\n"},
 
-    {"xl1", roche_xl1, METH_VARARGS, 
+    {"xl1", roche_xl1, METH_VARARGS,
      "xl1(q), q = M2/M1. Calculate the inner Lagrangian point distance."},
 
-    {"xl2", roche_xl2, METH_VARARGS, 
+    {"xl2", roche_xl2, METH_VARARGS,
      "xl2(q), q = M2/M1. Calculate the L2 point distance."},
 
-    {"xl3", roche_xl3, METH_VARARGS, 
+    {"xl3", roche_xl3, METH_VARARGS,
      "xl3(q), q = M2/M1. Calculate the L3 point distance."},
-
-    {"xl11", roche_xl11, METH_VARARGS, 
+    {"xl11", roche_xl11, METH_VARARGS,
      "xl11(q,spin), q = M2/M1, spin = spin/orbital of primary. Calculate the inner Lagrangian point distance with asynchronous primary."},
 
-    {"xl12", roche_xl12, METH_VARARGS, 
+    {"xl12", roche_xl12, METH_VARARGS,
      "xl12(q,spin), q = M2/M1, spin = spin/orbital of secondary. Calculate the inner Lagrangian point distance with asynchronous secondary."},
 
     {NULL, NULL, 0, NULL} /* Sentinel */
