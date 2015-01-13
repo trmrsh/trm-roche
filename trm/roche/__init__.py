@@ -24,6 +24,7 @@ lobe2      -- the secondary star's Roche lobe
 pvstream   -- produce position and velocity arrays of a stream
 qirbs      -- computes mass ratio, inclination and radius from bright-spot phases
 ref_sphere -- computes reference radius and potential given a filling factor
+rcirc      -- Verbunt & Rappaport circularisation radius formula
 rpot       -- computes Roche potential of a point
 rpot1      -- computes asynchronous Roche potential for star 1
 rpot2      -- computes asynchronous Roche potential for star 2
@@ -54,7 +55,7 @@ sys.path.append('.')
 from _roche import *
 import exceptions
 import math as m
-import numpy as npy
+import numpy as np
 import trm.subs as subs
 
 def bsphases(q, iangle, rbs):
@@ -117,8 +118,8 @@ def qirbs(deltaphi, pbi, pbe, ilo=78., ns=200):
                 pe.append(be-1)
             except ValueError:
                 break
-        pi = npy.array(pi)
-        pe = npy.array(pe)
+        pi = np.array(pi)
+        pe = np.array(pe)
 
         # Path is modelled as a + lambda * v where a and v are vectors
         # and lambda is a multiplier that must end up between 0 and 1
@@ -152,23 +153,24 @@ def qirbs(deltaphi, pbi, pbe, ilo=78., ns=200):
     # Compute the radius of the bright-spot and return
     rbs = m.sqrt((xs[imin]+lam*(xs[imin+1]-xs[imin]))**2+(ys[imin]+lam*(ys[imin+1]-ys[imin]))**2)
     return (q,iangle,rbs)
-    
-def wdphases(q, iangle, r1, r2=-1, ntheta=100):
+
+def wdphases(q, iangle, r1, r2=-1, ntheta=200):
     """
-    (phi3,phi4) = wdphases(q, iangle, r1, ntheta=100)
+    phi3, phi4 = wdphases(q, iangle, r1, ntheta=200)
 
     Returns the third and fourth contact phases of the white dwarf.
-    
+
     q      -- mass ratio = M2/M1
     iangle -- orbital inclination, degrees
     r1     -- scaled white dwarf radius = R1/a
     r2     -- scaled secondary radius, < 0 for Roche lobe filling
     ntheta -- number of angles to compute at the limb of white dwarf.
+              (used over quadrants)
 
     The routine searches points equally-spaced at quadrants of the limb
-    of the white dwarf to determine the contact phases. It will fail if 
-    there is no eclipse at all by raising a RocheError. For partial eclipses 
-    there will be a valid 'fourth' contact (marking the end of eclipse still) 
+    of the white dwarf to determine the contact phases. It will fail if
+    there is no eclipse at all by raising a RocheError. For partial eclipses
+    there will be a valid 'fourth' contact (marking the end of eclipse still)
     but the third contact will be set = -1.
     """
 
@@ -185,20 +187,20 @@ def wdphases(q, iangle, r1, r2=-1, ntheta=100):
         cosp = m.cos(2.*m.pi*phase)
         sinp = m.sin(2.*m.pi*phase)
         x    = subs.Vec3(-r1*sinp,r1*cosp,0.)
-        cosi = m.cos(m.pi*iangle/180.)
-        sini = m.sin(m.pi*iangle/180.)
+        cosi = m.cos(m.radians(iangle))
+        sini = m.sin(m.radians(iangle))
         y    = subs.Vec3(-r1*cosi*cosp,-r1*cosi*sinp,r1*sini)
         return (x,y)
 
     def uneclipsed3(q, iangle, phase, r1, ffac, ntheta):
         """
-        Says whether any of the upper-left quadrant of the WD is uneclipsed at phase = phase
-        'any' means all of the ntheta points computed uniformly around the quadrant. This
-        can be used to define the 3rd contact
+        Says whether any of the upper-left quadrant of the WD is uneclipsed at
+        phase = phase 'any' means all of the ntheta points computed uniformly
+        around the quadrant. This can be used to define the 3rd contact
         """
         x,y = xyv(iangle, r1, phase)
         for i in xrange(ntheta):
-            theta = m.pi*i/(ntheta-1)/2.
+            theta = (m.pi/2.)*i/float(ntheta-1)
             v = -x*m.cos(theta) + y*m.sin(theta)
             if not fblink(q, iangle, phase, v, ffac, 1.e-5):
                 return True
@@ -206,13 +208,13 @@ def wdphases(q, iangle, r1, r2=-1, ntheta=100):
 
     def eclipsed4(q, iangle, phase, r1, ffac, ntheta):
         """
-        Says whether any of lower-right quadrant of the WD is eclipsed at phase = phase
-        'Any' means any of ntheta points computed uniformly around the quadrant. This
-        can be used to define the 4th contact
+        Says whether any of lower-right quadrant of the WD is eclipsed at
+        phase = phase 'Any' means any of ntheta points computed uniformly
+        around the quadrant. This can be used to define the 4th contact
         """
         x,y = xyv(iangle, r1, phase)
         for i in xrange(ntheta):
-            theta = m.pi*i/(ntheta-1)/2.
+            theta = (m.pi/2.)*i/float(ntheta-1)
             v = x*m.cos(theta) - y*m.sin(theta)
             if fblink(q, iangle, phase, v, ffac, 1.e-5):
                 return True
@@ -222,9 +224,10 @@ def wdphases(q, iangle, r1, r2=-1, ntheta=100):
     phi4lo   = 0.00
     phi4hi   = 0.25
     if not eclipsed4(q, iangle, phi4lo, r1, ffac, ntheta):
-        raise RocheError('roche.wdphases: no eclipse at all for q,i,r1 = ' + str(q) + ',' + str(iangle) + ',' + str(r1))
+        raise RocheError('roche.wdphases: no eclipse at all for q,i,r1 = ' +
+                         str(q) + ',' + str(iangle) + ',' + str(r1))
 
-    while phi4hi - phi4lo > r1/ntheta/5.:
+    while phi4hi - phi4lo > r1/ntheta/10.:
         phi4 = (phi4lo+phi4hi)/2.
         if eclipsed4(q, iangle, phi4, r1, ffac, ntheta): 
             phi4lo = phi4
@@ -237,9 +240,9 @@ def wdphases(q, iangle, r1, r2=-1, ntheta=100):
     if uneclipsed3(q, iangle, phi3lo, r1, ffac, ntheta):
         return (-1.,phi4)
 
-    while phi3hi - phi3lo > r1/ntheta/5.:
+    while phi3hi - phi3lo > r1/ntheta/10.:
         phi3 = (phi3lo+phi3hi)/2.
-        if uneclipsed3(q, iangle, phi3, r1, ffac, ntheta): 
+        if uneclipsed3(q, iangle, phi3, r1, ffac, ntheta):
             phi3hi = phi3
         else:
             phi3lo = phi3
@@ -266,7 +269,7 @@ def wdradius(q, iangle, dpwd, ntheta=100, dr=1.e-5, rmax=0.1):
     r1hi = rmax
     while r1hi - r1lo > dr:
         r1 = (r1lo+r1hi)/2.
-        (phi3,phi4) = wdphases(q, iangle, r1, ntheta)
+        phi3, phi4 = wdphases(q, iangle, r1, ntheta=ntheta)
         dp = phi4-phi3
         if dp > dpwd:
             r1hi = r1
@@ -287,6 +290,16 @@ def jacobi(q, r, v):
     f2  = f1*q
     sec = subs.Vec3(1,0,0) 
     return (v.sqnorm()-r.y**2-(r.x-f2)**2)/2.-f1/r.norm()-f2/(r-sec).norm()
+
+def rcirc(q):
+    """
+    Returns circularisation radius from Verbunt & Rappaport (as fraction of binary
+    separation)
+    
+    q : mass ratio = M2/M1
+    """
+    lq = np.log10(q)
+    return 0.0883+lq*(-0.04858+lq*(0.11489+0.020475*lq))
 
 # Exception class
 class RocheError(exceptions.Exception):
