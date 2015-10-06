@@ -9,3 +9,4 @@ cdef extern from "trm/vec3.h" namespace "Subs":
         void set(double, double, double)
         void set(double*)
         void get(double*)
+        double length()
