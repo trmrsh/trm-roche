@@ -50,10 +50,7 @@ RocheError -- exception class
 
 """
 
-import sys
-sys.path.append('.')
-from _roche import *
-import exceptions
+from ._roche import *
 import math as m
 import numpy as np
 import trm.subs as subs
@@ -302,7 +299,7 @@ def rcirc(q):
     return 0.0883+lq*(-0.04858+lq*(0.11489+0.020475*lq))
 
 # Exception class
-class RocheError(exceptions.Exception):
+class RocheError(Exception):
     """For throwing exceptions from the roche module"""
     def __init__(self, value):
         self.value = value
