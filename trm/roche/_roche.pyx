@@ -552,11 +552,11 @@ def vlobe2(q,n=200):
     
     # memory views
     cdef float[:] vx_view = vx
-    cdef float[:] vy_view = vy    
-    
-    roche_vlobe1(q, &vx_view[0], &vy_view[0], n)
+    cdef float[:] vy_view = vy
+
+    roche_vlobe2(q, &vx_view[0], &vy_view[0], n)
     return vx, vy
-    
+
 def vstream(q, step=0.01, vtype=1, n=60):
     """
     Returns arrays of positions of the gas stream in velocity space.

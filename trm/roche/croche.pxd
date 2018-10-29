@@ -109,10 +109,11 @@ cdef extern from "trm/roche.h" namespace "Roche":
     #Calculates primary star's Roche lobe in orbital plane, velocity
     void roche_vlobe1 "Roche::vlobe1" \
         (double q, float *vx, float *vy, int n)
+
     #Calculates secondary star's Roche lobe in orbital plane, velocity
     void roche_vlobe2 "Roche::vlobe2" \
         (double q, float *vx, float *vy, int n)
-        
+       
     #Gas stream at regular radius steps in velocity coords
     void roche_vstrreg "Roche::vstrreg" \
         (double q, double step, float *vx, float *vy, int n, int type)
